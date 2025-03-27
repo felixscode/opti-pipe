@@ -1,0 +1,11 @@
+heracless
+shapely
+matplotlib
+
+[dev]
+black
+pytest
+
+[docs]
+sphinx
+sphinx-rtd-theme

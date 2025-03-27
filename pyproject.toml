@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools >= 69.5.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opti_pipe"
+version = "0.0.1"
+dependencies = [
+    "heracless",
+    "shapely",
+    "matplotlib",
+    "networkx"
+]
+requires-python = ">= 3.12"
+authors = [
+    {name = "Felix Schelling", email = "felix.schelling@protonmail.com"},
+]
+description = "pipe layout optimizer"
+keywords = ["YAML", "Dataclass", "Config","config", "config management"]
+readme = {file = "README.md", content-type = "text/markdown"}
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.12",
+]
+
+
+[tool.setuptools]
+package-dir = {"" = "./src/"}
+
+[project.urls]
+Repository = "https://github.com/yourusername/yourproject.git"
+Homepage = "https://yourprojecthomepage.com"
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "pytest",
+]
+docs = [
+    "sphinx",
+    "sphinx-rtd-theme",
+]
+[tool.black]
+line-length = 120

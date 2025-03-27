@@ -1,0 +1,22 @@
+Metadata-Version: 2.2
+Name: opti_pipe
+Version: 0.0.1
+Summary: pipe layout optimizer
+Author-email: Felix Schelling <felix.schelling@protonmail.com>
+Project-URL: Repository, https://github.com/yourusername/yourproject.git
+Project-URL: Homepage, https://yourprojecthomepage.com
+Keywords: YAML,Dataclass,Config,config,config management
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: heracless
+Requires-Dist: shapely
+Requires-Dist: matplotlib
+Provides-Extra: dev
+Requires-Dist: black; extra == "dev"
+Requires-Dist: pytest; extra == "dev"
+Provides-Extra: docs
+Requires-Dist: sphinx; extra == "docs"
+Requires-Dist: sphinx-rtd-theme; extra == "docs"

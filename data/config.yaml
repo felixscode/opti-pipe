@@ -1,0 +1,35 @@
+description: test
+
+
+pipe:
+  color: black
+  width: 0.02
+floor:
+  fill_color: white
+  edge_color: black
+  edge_width: 1
+inlet:
+  fill_color: white
+  edge_color: black
+  edge_width: 1
+outlet:
+  fill_color: white
+  edge_color: black
+  edge_width: 1
+distributor:
+  fill_color: white
+  edge_color: black
+  edge_width: 1
+  buffer_radius: 0.1
+connector:
+  fill_color: white
+  edge_color: black
+  edge_width: 1
+  buffer_radius: 0.1
+node:
+  fill_color: white
+  edge_color: black
+  edge_width: 1
+  buffer_radius: 0.1
+  
+  
