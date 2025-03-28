@@ -1,6 +1,7 @@
 heracless
 shapely
 matplotlib
+networkx
 
 [dev]
 black

@@ -3,6 +3,7 @@ from enum import Enum
 from shapely.geometry import Point,Polygon,LineString
 from shapely.plotting import plot_polygon,plot_points
 from opti_pipe.utils import Config
+from opti_pipe.heat_distribution import render_heat
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
@@ -42,7 +43,11 @@ class Node(Component):
         self.type = node_type
         self.geometry = Point(self.x,self.y)
 
-    
+    def set_heat(self,heat_output:float):
+        if not self.type == NodeType.OUTPUT:
+            raise ValueError('Only output nodes can have heat')
+        self.heat = heat_output
+
     def is_neighbor(self,other,cell_size):
         if not any([self.x == other.x ,self.y == other.y]):
             return False
@@ -60,14 +65,20 @@ class Node(Component):
     def distance(self,other):
         return self.geometry.distance(other.geometry)
 
+
+    def _match_color(self):
+        if hasattr(self,'heat'):
+            return 'red'
+        if self.type == NodeType.CORNER:
+            return 'green'
+        if self.type == NodeType.GRID:
+            return 'grey'
+        if self.type in (NodeType.INPUT,NodeType.OUTPUT):
+            return 'blue'
+        raise ValueError('Node type not supported')
+    
     def _render(self):
-        color = (
-            "red" if self.type == NodeType.INPUT else
-            "blue" if self.type == NodeType.OUTPUT else
-            "green" if self.type == NodeType.CORNER else
-            "grey" if self.type == NodeType.GRID else
-            "black"
-        )
+        color =self._match_color()
         plot_points(self.geometry,color=color)
         
 
@@ -77,6 +88,8 @@ class Distributor(Component):
         self.heat_per_node = heat_per_node
         self.inlets = tuple(filter(lambda x: x.type == NodeType.INPUT, nodes))
         self.outlets = tuple(filter(lambda x: x.type == NodeType.OUTPUT, nodes))
+        for node in self.outlets:
+            node.set_heat(heat_per_node)
         self.geometry = self._get_geometry(self.inlets,self.outlets)
         if len(self.inlets) < 1:
             raise ValueError('Distributor must more than one input')
@@ -109,7 +122,8 @@ class Pipe(Component):
         self.output = output
         self.corners = corners
         self.geometry = self._get_geometry()
-        self.heat = 1
+        self.heat = self.output.heat
+  
     
     def _get_geometry(self):
         line = LineString([self.input.geometry] + [corner.geometry for corner in self.corners] + [self.output.geometry])
@@ -120,18 +134,26 @@ class Pipe(Component):
     
     @staticmethod
     def from_path(config,path):
-        input_node = path[0]
-        output_node = path[-1]
-        corners = path[1:-1]
+        input_node = next(filter(lambda x: x.type == NodeType.INPUT,path))
+        output_node = next(filter(lambda x: x.type == NodeType.OUTPUT,path))
+        path.remove(input_node)
+        path.remove(output_node)
+        corners = path
         return Pipe(config,input_node,output_node,corners)
 
 
 class RoomConnection(Component):
-    def __init__(self,config, input:Node, output:Node):
+    def __init__(self,config, input:Node, output:Node,heat_loss:float):
         super().__init__(config)
         self.input = input
         self.output = output
         self.geometry = self._get_geometry()
+        self.heat_loss = heat_loss
+        
+
+    def set_heat_output(self,heat_input:float):
+        self.heat_output = heat_input - self.heat_loss
+        self.output.set_heat(self.heat_output)
 
     def iter_nodes(self):
         yield self.input
@@ -154,6 +176,8 @@ class Model():
         self.distributor = distributor
         self.pipes = tuple()
         self.connectors = room_connections
+        for connector in room_connections:
+            connector.set_heat_output(distributor.heat_per_node)
 
     def add(self,component:Component):
         match component:
@@ -172,11 +196,14 @@ class Model():
         self.graph = Graph(self.config,self,cell_size)
 
 
+
     def render(self,figsize:tuple[int,int]= (10,10),show_graph:bool=False):
         plt.figure(figsize=figsize)
         ax = plt.gca()
         ax.axis('off')  # Turn off the axis
         plt.grid(visible=False)
+        if len(self.pipes) > 0:
+            render_heat(self,self.config,self.config.heat.resolution,self.floor.geometry)
         self.floor._render()
         if show_graph:
             if hasattr(self,'graph'):

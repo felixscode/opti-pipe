@@ -1,4 +1,4 @@
-Metadata-Version: 2.2
+Metadata-Version: 2.4
 Name: opti_pipe
 Version: 0.0.1
 Summary: pipe layout optimizer
@@ -14,9 +14,12 @@ Description-Content-Type: text/markdown
 Requires-Dist: heracless
 Requires-Dist: shapely
 Requires-Dist: matplotlib
+Requires-Dist: networkx
 Provides-Extra: dev
 Requires-Dist: black; extra == "dev"
 Requires-Dist: pytest; extra == "dev"
 Provides-Extra: docs
 Requires-Dist: sphinx; extra == "docs"
 Requires-Dist: sphinx-rtd-theme; extra == "docs"
+
+# opti-pipe

@@ -204,3 +204,6 @@ pyrightconfig.json
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/python,visualstudiocode,jupyternotebooks
+src/opti_pipe.egg-info/PKG-INFO
+src/opti_pipe.egg-info/requires.txt
+src/opti_pipe.egg-info/SOURCES.txt

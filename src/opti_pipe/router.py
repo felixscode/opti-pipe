@@ -119,4 +119,9 @@ class NaiveRouter(Router):
             self.model.add(pipe)
             _graph = Utils.prune_visited_nodes(path_nodes,_graph)
         return self.model
-            
+
+
+class TsmRouter(Router):
+    def __init__(self,config,model,grid_size):
+        super().__init__(config,model)
+        self.grid_size = grid_size

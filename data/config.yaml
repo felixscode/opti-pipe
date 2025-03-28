@@ -31,5 +31,9 @@ node:
   edge_color: black
   edge_width: 1
   buffer_radius: 0.1
+heat:
+  resolution: 0.01
+  conv_iterations: 100
+  conv_kernel_size: 33
   
   

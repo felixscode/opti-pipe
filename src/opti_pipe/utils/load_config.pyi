@@ -5,10 +5,32 @@ from pathlib import Path
 
 
 @dataclass(frozen=True)
-class Inlet:
+class Connector:
     fill_color: str
     edge_color: str
     edge_width: int
+    buffer_radius: float
+
+
+@dataclass(frozen=True)
+class Node:
+    fill_color: str
+    edge_color: str
+    edge_width: int
+    buffer_radius: float
+
+
+@dataclass(frozen=True)
+class Floor:
+    fill_color: str
+    edge_color: str
+    edge_width: int
+
+
+@dataclass(frozen=True)
+class Pipe:
+    color: str
+    width: float
 
 
 @dataclass(frozen=True)
@@ -21,20 +43,21 @@ class Config:
     distributor: "Distributor"
     connector: "Connector"
     node: "Node"
+    heat: "Heat"
 
 
 @dataclass(frozen=True)
-class Pipe:
-    color: str
-    width: float
+class Heat:
+    resolution: float
+    conv_iterations: int
+    conv_kernel_size: int
 
 
 @dataclass(frozen=True)
-class Connector:
+class Outlet:
     fill_color: str
     edge_color: str
     edge_width: int
-    buffer_radius: float
 
 
 @dataclass(frozen=True)
@@ -46,25 +69,10 @@ class Distributor:
 
 
 @dataclass(frozen=True)
-class Outlet:
+class Inlet:
     fill_color: str
     edge_color: str
     edge_width: int
-
-
-@dataclass(frozen=True)
-class Floor:
-    fill_color: str
-    edge_color: str
-    edge_width: int
-
-
-@dataclass(frozen=True)
-class Node:
-    fill_color: str
-    edge_color: str
-    edge_width: int
-    buffer_radius: float
 
 
 def load_config(config_path: str) -> Config: ...
