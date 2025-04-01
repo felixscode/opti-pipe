@@ -11,6 +11,7 @@ import torch.nn.functional as F
 
 Model = type("Model", (), {})
 
+
 def _pos_to_index_mapper(minx, maxx, miny, maxy, x_steps, y_steps, x, y):
     if maxx == minx or maxy == miny:
         raise ValueError("Invalid envelope dimensions: max must be greater than min.")
@@ -18,17 +19,18 @@ def _pos_to_index_mapper(minx, maxx, miny, maxy, x_steps, y_steps, x, y):
     # Normalize x and y to a value between 0 and 1.
     norm_x = (x - minx) / (maxx - minx)
     norm_y = (y - miny) / (maxy - miny)
-    
+
     # Multiply by number of steps to get the index.
     # Using int() here essentially floors the result.
     i = int(norm_x * x_steps)
     j = int(norm_y * y_steps)
-    
+
     # Ensure that indices are within bounds (if x == maxx, we force the last index)
     i = min(max(i, 0), x_steps - 1)
     j = min(max(j, 0), y_steps - 1)
-    
+
     return i, j
+
 
 def _index_to_pos_mapper(minx, maxx, miny, maxy, x_steps, y_steps, j, i):
     if x_steps <= 0 or y_steps <= 0:
@@ -47,6 +49,7 @@ def _index_to_pos_mapper(minx, maxx, miny, maxy, x_steps, y_steps, j, i):
 
     return x, y
 
+
 def _get_init_heat_matrix(model: Model, resolution) -> tuple:
     """
     Initialize the heat matrix for the model.
@@ -62,6 +65,7 @@ def _get_init_heat_matrix(model: Model, resolution) -> tuple:
     pos_mapper = partial(_index_to_pos_mapper, minx, maxx, miny, maxy, x_steps, y_steps)
     return heat_matrix, index_mapper, pos_mapper
 
+
 def _process_index_tuples(index_tuple, pipes, pos_mapper, resolution):
     i, j = index_tuple
     pos = pos_mapper(i, j)
@@ -73,20 +77,25 @@ def _process_index_tuples(index_tuple, pipes, pos_mapper, resolution):
             break
     return ((i, j), val)
 
+
 def _get_pipe_mask(model, matrix, pos_mapper, resolution):
     index_tuples = [(i, j) for i in range(matrix.shape[0]) for j in range(matrix.shape[1])]
     pipes = [(pipe.geometry, pipe.heat) for pipe in model.pipes]
     # Use multiprocessing to speed-up mask generation.
     with mp.Pool() as pool:
-        results = pool.map(partial(_process_index_tuples, pipes=pipes, pos_mapper=pos_mapper, resolution=resolution), index_tuples)
-    
+        results = pool.map(
+            partial(_process_index_tuples, pipes=pipes, pos_mapper=pos_mapper, resolution=resolution), index_tuples
+        )
+
     pipe_mask = {t: v for t, v in results if v != 0}
     return pipe_mask
+
 
 def apply_mask(matrix, pipe_mask):
     if pipe_mask:
         indices = tuple(zip(*pipe_mask.keys()))
         matrix[indices] = list(pipe_mask.values())
+
 
 def _apply_kernel(matrix, kernel, pipe_mask, iterations):
     """
@@ -95,15 +104,15 @@ def _apply_kernel(matrix, kernel, pipe_mask, iterations):
     After each iteration, the pipe_mask is reapplied.
     """
     # Set up device
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     # Convert matrix to torch tensor and add batch and channel dimensions: [1, 1, H, W]
     mat = torch.tensor(matrix, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0)
-    
+
     # Convert kernel to torch tensor and reshape to [1, 1, kH, kW]
     kernel_t = torch.tensor(kernel, dtype=torch.float32, device=device)
     kernel_t = kernel_t.unsqueeze(0).unsqueeze(0)
-    
+
     # Pre-calculate padding to achieve "same" convolution
     pad = kernel.shape[0] // 2
 
@@ -135,22 +144,24 @@ def _apply_kernel(matrix, kernel, pipe_mask, iterations):
     result = mat.squeeze().cpu().numpy()
     return result
 
+
 def _make_kernel(size):
     """Create a Gaussian kernel with the given size."""
     if size % 2 == 0:
         raise ValueError("Kernel size must be odd.")
-    
+
     sigma = size / 6.0  # Approximation to cover 99.7% within the kernel
     center = size // 2
     kernel = np.zeros((size, size))
-    
+
     for i in range(size):
         for j in range(size):
             x, y = i - center, j - center
             kernel[i, j] = np.exp(-(x**2 + y**2) / (2 * sigma**2))
-    
+
     kernel /= np.sum(kernel)  # Normalize the kernel
     return kernel
+
 
 def get_heat_distribution(model: Model, config: Config, resolution: float) -> np.ndarray:
     """
@@ -158,23 +169,23 @@ def get_heat_distribution(model: Model, config: Config, resolution: float) -> np
     """
     heat_matrix, index_mapper, pos_mapper = _get_init_heat_matrix(model, resolution)
     pipe_mask = _get_pipe_mask(model, heat_matrix, pos_mapper, resolution)
-    
+
     # Apply initial pipe mask
     indices = tuple(zip(*pipe_mask.keys()))
     heat_matrix[indices] = list(pipe_mask.values())
-    
+
     kernel = _make_kernel(config.heat.conv_kernel_size)
     heat_matrix = _apply_kernel(heat_matrix, kernel=kernel, pipe_mask=pipe_mask, iterations=config.heat.conv_iterations)
-    
+
     # Normalize the heat matrix between 0 and 1.
     heat_matrix = (heat_matrix - np.min(heat_matrix)) / (np.max(heat_matrix) - np.min(heat_matrix))
-    
+
     return heat_matrix
+
 
 def render_heat(model, config, resolution, floor):
     heat_matrix = get_heat_distribution(model, config, resolution)
     minx, miny, maxx, maxy = floor.envelope.bounds
     extent = [minx, maxx, miny, maxy]
 
-    plt.imshow(heat_matrix, extent=extent, cmap='coolwarm', interpolation='nearest', alpha=0.5)
-    plt.show()
+    plt.imshow(heat_matrix, extent=extent, cmap="coolwarm", interpolation="nearest", alpha=0.5)

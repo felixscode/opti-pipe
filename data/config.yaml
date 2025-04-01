@@ -1,6 +1,5 @@
 description: test
 
-
 pipe:
   color: black
   width: 0.02
@@ -35,5 +34,3 @@ heat:
   resolution: 0.01
   conv_iterations: 100
   conv_kernel_size: 33
-  
-  

@@ -83,6 +83,12 @@ class Node(Component):
         color = self._match_color()
         plot_points(self.geometry, color=color)
 
+    def __str__(self):
+        return f"Node({self.x}, {self.y}, {self.type})"
+
+    def __repr__(self):
+        return str(self)
+
 
 class Distributor(Component):
     def __init__(self, config: Config, nodes: tuple[Node], heat_per_node: float):
@@ -125,7 +131,19 @@ class Pipe(Component):
         self.output = output
         self.corners = corners
         self.geometry = self._get_geometry()
-        self.heat = self.output.heat
+        self._set_heat()
+
+    def _set_heat(self):
+        has_heat = [hasattr(self.input, "heat"), hasattr(self.output, "heat")]
+        if not any(has_heat):
+            raise ValueError("Pipe must have at least one input or output with heat")
+        if has_heat[0]:
+            heat = self.input.heat
+            self.output.set_heat(heat)
+        if has_heat[1]:
+            heat = self.output.heat
+            self.input.set_heat(heat)
+        self.heat = heat
 
     def _get_geometry(self):
         line = LineString([self.input.geometry] + [corner.geometry for corner in self.corners] + [self.output.geometry])
@@ -136,11 +154,10 @@ class Pipe(Component):
 
     @staticmethod
     def from_path(config, path, distributor: Distributor):
-        input_output_nodes = tuple(filter(lambda x: x.type == NodeType.INPUT | NodeType.OUTPUT, path)))
-        is_input = all([node for node in input_output_nodes if node.type == NodeType.INPUT])
-        is_output = all([node for node in input_output_nodes if node.type == NodeType.OUTPUT])
-        if not is_input or not is_output:
-            raise ValueError("Path must have to nodes of type input or 2 nodes of type output")
+        input_output_nodes = tuple(filter(lambda x: x.type in [NodeType.INPUT, NodeType.OUTPUT], path))
+        is_input = all([node.type == NodeType.INPUT for node in input_output_nodes])
+        is_output = all([node.type == NodeType.OUTPUT for node in input_output_nodes])
+
         match (is_input, is_output):
             case (True, False):
                 reverse = False
@@ -148,11 +165,14 @@ class Pipe(Component):
                 reverse = True
             case _:
                 raise ValueError("Path must have to nodes of type input or 2 nodes of type output")
-        _ip_nodes = sorted(input_output_nodes, key=lambda x: distributor.geometry.distance(x.geometry),reverse=reverse)
-        input_node,output_node = _ip_nodes[0],_ip_nodes[1]
+        _ip_nodes = sorted(input_output_nodes, key=lambda x: distributor.geometry.distance(x.geometry), reverse=reverse)
+        input_node, output_node = _ip_nodes[0], _ip_nodes[1]
         for ion in input_output_nodes:
             path.remove(ion)
+        # corners = sorted(path, key=lambda x: x.geometry.distance(input_node.geometry))
         corners = path
+        if corners[0].geometry.distance(input_node.geometry) > corners[-1].geometry.distance(input_node.geometry):
+            corners = corners[::-1]
         return Pipe(config, input_node, output_node, corners)
 
 
@@ -216,12 +236,14 @@ class Model:
     def add_graph(self, cell_size: float):
         self.graph = Graph(self.config, self, cell_size)
 
-    def render(self, figsize: tuple[int, int] = (10, 10), show_graph: bool = False):
+    def render(
+        self, figsize: tuple[int, int] = (10, 10), show_graph: bool = False, render_heat_distribution: bool = False
+    ):
         plt.figure(figsize=figsize)
         ax = plt.gca()
         ax.axis("off")  # Turn off the axis
         plt.grid(visible=False)
-        if len(self.pipes) > 0:
+        if len(self.pipes) > 0 and render_heat_distribution:
             render_heat(self, self.config, self.config.heat.resolution, self.floor.geometry)
         self.floor._render()
         if show_graph:
@@ -232,7 +254,7 @@ class Model:
         for connector in self.connectors:
             connector._render()
         self.distributor._render()
-        # plt.show()
+        plt.show()
 
 
 class Graph:
@@ -281,7 +303,7 @@ class Graph:
         for connector in self.connectors:
             nodes = sorted(list(connector.iter_nodes()), key=lambda n: (n.x, n.y))
             g.add_nodes_from(self.nodes_as_dict(nodes))
-            node_pairs = Utils.find_node_pairs(self.nodes, nodes)
+            node_pairs = Utils.find_node_pairs(self.nodes, nodes, grid_size=self.cell_size)
             for n1, n2 in node_pairs:
                 g.add_edge(n1.id, n2.id)
 
@@ -296,8 +318,15 @@ class Graph:
 
 
 class Utils:
+
+    def _node_pair_cost_func(grid_size, connector_node, other_node):
+        distance = connector_node.geometry.distance(other_node.geometry)
+        dist_weight = distance // (grid_size / 6)
+
+        return dist_weight, other_node.x, other_node.y
+
     @staticmethod
-    def find_node_pairs(grid_nodes, connector_nodes):
+    def find_node_pairs(grid_nodes, connector_nodes, grid_size):
 
         connected_grid_nodes = []
 
@@ -324,6 +353,6 @@ class Utils:
 
         # yield the nearest nodes
         for cn in connector_nodes:
-            potential_nodes = sorted(potential_nodes, key=lambda node: node.distance(cn))
+            potential_nodes = sorted(potential_nodes, key=lambda node: Utils._node_pair_cost_func(grid_size, cn, node))
             yield cn, potential_nodes[0]
-            potential_nodes.remove(potential_nodes[0])
+            yield cn, potential_nodes[1]
