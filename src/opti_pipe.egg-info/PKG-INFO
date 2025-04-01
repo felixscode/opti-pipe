@@ -13,8 +13,11 @@ Requires-Python: >=3.12
 Description-Content-Type: text/markdown
 Requires-Dist: heracless
 Requires-Dist: shapely
+Requires-Dist: scipy
 Requires-Dist: matplotlib
 Requires-Dist: networkx
+Requires-Dist: ipykernel
+Requires-Dist: torch
 Provides-Extra: dev
 Requires-Dist: black; extra == "dev"
 Requires-Dist: pytest; extra == "dev"

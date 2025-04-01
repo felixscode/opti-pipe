@@ -1,7 +1,10 @@
 heracless
 shapely
+scipy
 matplotlib
 networkx
+ipykernel
+torch
 
 [dev]
 black

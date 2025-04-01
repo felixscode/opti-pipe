@@ -13,6 +13,19 @@ class Connector:
 
 
 @dataclass(frozen=True)
+class Pipe:
+    color: str
+    width: float
+
+
+@dataclass(frozen=True)
+class Outlet:
+    fill_color: str
+    edge_color: str
+    edge_width: int
+
+
+@dataclass(frozen=True)
 class Node:
     fill_color: str
     edge_color: str
@@ -25,12 +38,6 @@ class Floor:
     fill_color: str
     edge_color: str
     edge_width: int
-
-
-@dataclass(frozen=True)
-class Pipe:
-    color: str
-    width: float
 
 
 @dataclass(frozen=True)
@@ -54,7 +61,7 @@ class Heat:
 
 
 @dataclass(frozen=True)
-class Outlet:
+class Inlet:
     fill_color: str
     edge_color: str
     edge_width: int
@@ -66,13 +73,6 @@ class Distributor:
     edge_color: str
     edge_width: int
     buffer_radius: float
-
-
-@dataclass(frozen=True)
-class Inlet:
-    fill_color: str
-    edge_color: str
-    edge_width: int
 
 
 def load_config(config_path: str) -> Config: ...
