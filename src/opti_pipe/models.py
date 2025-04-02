@@ -37,12 +37,16 @@ class NodeType(Enum):
 
 class Node(Component):
     def __init__(self, config, x: int, y: int, node_type: NodeType):
+
         super().__init__(config)
         self.x = round(x, 2)
         self.y = round(y, 2)
         self.id = f"{self.x}_{self.y}_{node_type}"
         self.type = node_type
         self.geometry = Point(self.x, self.y)
+
+    def set_parent(self, parent):
+        self.parent = parent
 
     def set_heat(self, heat_output: float):
         self.heat = heat_output
@@ -55,11 +59,9 @@ class Node(Component):
         return True
 
     def shares_parent(self, other):
-        if self.x == other.x:
-            return True
-        if self.y == other.y:
-            return True
-        return False
+        if not hasattr(self, "parent") or not hasattr(other, "parent"):
+            raise ValueError("Node has no parent")
+        return self.parent == other.parent
 
     def distance(self, other):
         return self.geometry.distance(other.geometry)
@@ -94,6 +96,8 @@ class Distributor(Component):
     def __init__(self, config: Config, nodes: tuple[Node], heat_per_node: float):
         super().__init__(config)
         self.heat_per_node = heat_per_node
+        for node in nodes:
+            node.set_parent(self)
         self.inlets = tuple(filter(lambda x: x.type == NodeType.INPUT, nodes))
         self.outlets = tuple(filter(lambda x: x.type == NodeType.OUTPUT, nodes))
         for node in self.inlets:
@@ -154,7 +158,7 @@ class Pipe(Component):
 
     @staticmethod
     def from_path(config, path, distributor: Distributor):
-        input_output_nodes = tuple(filter(lambda x: x.type in [NodeType.INPUT, NodeType.OUTPUT], path))
+        input_output_nodes = (path[0], path[-1])
         is_input = all([node.type == NodeType.INPUT for node in input_output_nodes])
         is_output = all([node.type == NodeType.OUTPUT for node in input_output_nodes])
 
@@ -183,6 +187,8 @@ class RoomConnection(Component):
         self.output = output
         self.geometry = self._get_geometry()
         self.heat_loss = heat_loss
+        self.input.set_parent(self)
+        self.output.set_parent(self)
 
     def set_heat_output(self, heat_input: float):
         self.heat_output = heat_input - self.heat_loss
@@ -287,6 +293,8 @@ class Graph:
             for y in np.linspace(miny, maxy, n_y_nodes):
                 if self.floor.geometry.contains(Point(x, y)):
                     grid.append(Node(self.config, x, y, NodeType.GRID))
+        for node in grid:
+            node.set_parent(self.floor)
         return tuple(grid)
 
     def nodes_as_dict(self, nodes):
@@ -356,3 +364,4 @@ class Utils:
             potential_nodes = sorted(potential_nodes, key=lambda node: Utils._node_pair_cost_func(grid_size, cn, node))
             yield cn, potential_nodes[0]
             yield cn, potential_nodes[1]
+            yield cn, potential_nodes[2]

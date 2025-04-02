@@ -60,24 +60,23 @@ class Router(ABC):
     def __init__(self, config, model):
         self.config = config
         self.model = model
-        self.node_pairs = self.find_node_pairs()
-
-    def _find(self, nodes):
-        if len(nodes) == 2:
-            return (tuple(nodes),)
-        next_node = nodes.pop()
-        _avalibe_nodes = [node for node in nodes if not node.shares_parent(next_node)]
-        closest_node = min(_avalibe_nodes, key=lambda x: next_node.geometry.distance(x.geometry))
-        nodes.remove(closest_node)
-        return ((next_node, closest_node),) + self._find(nodes)
+        self.node_pairs = tuple(self.find_node_pairs())
 
     def find_node_pairs(self):
-        nodes = tuple(self.model.graph.iter_nodes())
-        input_nodes = [node for node in nodes if node.type == NodeType.INPUT]
-        output_nodes = [node for node in nodes if node.type == NodeType.OUTPUT]
-        input_node_pairs = self._find(input_nodes)
-        output_node_pairs = self._find(output_nodes)
-        return output_node_pairs + input_node_pairs
+        room_inputs = [con.input for con in self.model.connectors]
+        room_outputs = [con.output for con in self.model.connectors]
+        distributor_inputs = list(self.model.distributor.inlets)
+        distributor_outputs = list(self.model.distributor.outlets)
+        if len(distributor_inputs) != len(room_inputs) or len(distributor_outputs) != len(room_outputs):
+            raise ValueError("Mismatch between distributor and room nodes")
+        for ri in room_inputs:
+            closest_node = min(distributor_inputs, key=lambda x: ri.distance(x))
+            distributor_inputs.remove(closest_node)
+            yield closest_node, ri
+        for ro in room_outputs:
+            closest_node = min(distributor_outputs, key=lambda x: ro.distance(x))
+            distributor_outputs.remove(closest_node)
+            yield closest_node, ro
 
     @abstractmethod
     def route(self):
@@ -91,7 +90,6 @@ class NaiveRouter(Router):
 
     @staticmethod
     def weight_func(center_line: shapely.MultiLineString, node1, node2, _):
-
         n1x, n1y = float(node1.split("_")[0]), float(node1.split("_")[1])
         n2x, n2y = float(node2.split("_")[0]), float(node2.split("_")[1])
         nx = (float(n1x) + float(n2x)) / 2
@@ -110,7 +108,8 @@ class NaiveRouter(Router):
             try:
                 path = nx.shortest_path(_graph, input_node.id, output_node.id, weight=w_func)
             except Exception:
-                continue
+                print(f"Path not found between {input_node.id} and {output_node.id}")
+
             path_nodes = [next(filter(lambda x: x.id == node_id, nodes), None) for node_id in path]
             if None in path_nodes:
                 raise ValueError("Node not found in graph")
@@ -120,7 +119,10 @@ class NaiveRouter(Router):
         return self.model
 
 
-class TsmRouter(Router):
+class OptiRouter(Router):
     def __init__(self, config, model, grid_size):
         super().__init__(config, model)
         self.grid_size = grid_size
+
+    def route(self):
+        nodes = tuple(self.model.graph.iter_nodes())
