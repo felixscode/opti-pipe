@@ -260,7 +260,7 @@ class Model:
         for connector in self.connectors:
             connector._render()
         self.distributor._render()
-        plt.show()
+        # plt.show()
 
 
 class Graph:
