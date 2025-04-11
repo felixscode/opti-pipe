@@ -311,7 +311,7 @@ class Graph:
         for connector in self.connectors:
             nodes = sorted(list(connector.iter_nodes()), key=lambda n: (n.x, n.y))
             g.add_nodes_from(self.nodes_as_dict(nodes))
-            node_pairs = Utils.find_node_pairs(self.nodes, nodes, grid_size=self.cell_size)
+            node_pairs = Utils.find_node_pairs(self.nodes, nodes, center=connector.geometry.centroid)
             for n1, n2 in node_pairs:
                 g.add_edge(n1.id, n2.id)
 
@@ -326,15 +326,29 @@ class Graph:
 
 
 class Utils:
+    @staticmethod
+    def recursive_node_connector(potential_nodes,connector_nodes,center):
+        if len(potential_nodes) == 0:
+            raise ValueError("No potential nodes found, decrease grid size")
+        if len(connector_nodes) == 0:
+            return tuple()
+        
+        # get next node
+        next_node = min(connector_nodes, key=lambda node: node.geometry.distance(center))
+        # remove node from connector nodes
+        connector_nodes = tuple(node for node in connector_nodes if node != next_node)
 
-    def _node_pair_cost_func(grid_size, connector_node, other_node):
-        distance = connector_node.geometry.distance(other_node.geometry)
-        dist_weight = distance // (grid_size / 6)
+        # find cloasest potential node
+        closest_node = min(potential_nodes, key=lambda node: node.geometry.distance(next_node.geometry))
+        # remove node from potential nodes
+        potential_nodes = tuple(node for node in potential_nodes if node != closest_node)
+        # apply recursion
+        return ((next_node, closest_node),) + Utils.recursive_node_connector(potential_nodes, connector_nodes,center)
 
-        return dist_weight, other_node.x, other_node.y
+
 
     @staticmethod
-    def find_node_pairs(grid_nodes, connector_nodes, grid_size):
+    def find_node_pairs(grid_nodes, connector_nodes, center):
 
         connected_grid_nodes = []
 
@@ -359,9 +373,4 @@ class Utils:
         if len(potential_nodes) < len(connector_nodes):
             raise ValueError("No enoght nodes found")
 
-        # yield the nearest nodes
-        for cn in connector_nodes:
-            potential_nodes = sorted(potential_nodes, key=lambda node: Utils._node_pair_cost_func(grid_size, cn, node))
-            yield cn, potential_nodes[0]
-            yield cn, potential_nodes[1]
-            yield cn, potential_nodes[2]
+        return Utils.recursive_node_connector(potential_nodes, connector_nodes,center)

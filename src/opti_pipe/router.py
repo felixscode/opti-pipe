@@ -47,7 +47,7 @@ class Utils:
         floor = model.floor
         distributor = model.distributor
         connectors = model.connectors
-        pipe_width = grid_size
+
 
         _dir: tuple[float, float] = Utils._get_direction(distributor.inlets[0], distributor.outlets[0])
         _centroid: shapely.Point = distributor.geometry.centroid
@@ -67,7 +67,10 @@ class Router(ABC):
     def __init__(self, config, model):
         self.config = config
         self.model = model
-        self.node_pairs = tuple(self.find_node_pairs())
+        _center = self.model.distributor.geometry.centroid
+        self.node_pairs = sorted(tuple(self.find_node_pairs()), key=lambda x: x[0].geometry.distance(_center)) # sort by distance to distributor center to process nodes to the inner first
+
+
 
     def find_node_pairs(self):
         room_inputs = [con.input for con in self.model.connectors]
@@ -103,7 +106,7 @@ class NaiveRouter(Router):
         ny = (float(n1y) + float(n2y)) / 2
         dx = abs(n1x - n2x)
         dy = abs(n1y - n2y)
-        bias = int(not 0.0 in (dx, dy))
+        bias = int(not 0.0 in (dx, dy)) * 10
         return center_line.distance(shapely.Point(nx, ny)) + bias
 
     def route(self) -> Model:
@@ -111,6 +114,7 @@ class NaiveRouter(Router):
         centerline = Utils.get_centerline(self.model, self.grid_size)
         w_func = partial(self.weight_func, centerline)
         _graph = self.model.graph.graph.copy()
+        
         for input_node, output_node in self.node_pairs:
             try:
                 path = nx.shortest_path(_graph, input_node.id, output_node.id, weight=w_func)
@@ -122,8 +126,9 @@ class NaiveRouter(Router):
                 raise ValueError("Node not found in graph")
             pipe = Pipe.from_path(self.config, path_nodes, self.model.distributor)
             self.model.add(pipe)
-            _graph = Utils.prune_visited_nodes(path_nodes, _graph)
+            _graph = Utils.prune_visited_nodes(path_nodes+[input_node,output_node], _graph)
         return self.model
+
 
 
 class OptiRouter(Router):
