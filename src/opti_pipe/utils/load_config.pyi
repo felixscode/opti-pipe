@@ -12,20 +12,7 @@ class Heat:
 
 
 @dataclass(frozen=True)
-class Config:
-    description: str
-    pipe: "Pipe"
-    floor: "Floor"
-    inlet: "Inlet"
-    outlet: "Outlet"
-    distributor: "Distributor"
-    connector: "Connector"
-    node: "Node"
-    heat: "Heat"
-
-
-@dataclass(frozen=True)
-class Node:
+class Connector:
     fill_color: str
     edge_color: str
     edge_width: int
@@ -40,11 +27,9 @@ class Inlet:
 
 
 @dataclass(frozen=True)
-class Distributor:
-    fill_color: str
-    edge_color: str
-    edge_width: int
-    buffer_radius: float
+class Pipe:
+    color: str
+    width: float
 
 
 @dataclass(frozen=True)
@@ -55,13 +40,28 @@ class Floor:
 
 
 @dataclass(frozen=True)
-class Pipe:
-    color: str
-    width: float
+class Config:
+    description: str
+    pipe: "Pipe"
+    floor: "Floor"
+    inlet: "Inlet"
+    outlet: "Outlet"
+    distributor: "Distributor"
+    connector: "Connector"
+    node: "Node"
+    heat: "Heat"
 
 
 @dataclass(frozen=True)
-class Connector:
+class Distributor:
+    fill_color: str
+    edge_color: str
+    edge_width: int
+    buffer_radius: float
+
+
+@dataclass(frozen=True)
+class Node:
     fill_color: str
     edge_color: str
     edge_width: int

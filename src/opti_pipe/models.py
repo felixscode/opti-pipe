@@ -327,12 +327,12 @@ class Graph:
 
 class Utils:
     @staticmethod
-    def recursive_node_connector(potential_nodes,connector_nodes,center):
+    def recursive_node_connector(potential_nodes, connector_nodes, center):
         if len(potential_nodes) == 0:
             raise ValueError("No potential nodes found, decrease grid size")
         if len(connector_nodes) == 0:
             return tuple()
-        
+
         # get next node
         next_node = min(connector_nodes, key=lambda node: node.geometry.distance(center))
         # remove node from connector nodes
@@ -343,9 +343,7 @@ class Utils:
         # remove node from potential nodes
         potential_nodes = tuple(node for node in potential_nodes if node != closest_node)
         # apply recursion
-        return ((next_node, closest_node),) + Utils.recursive_node_connector(potential_nodes, connector_nodes,center)
-
-
+        return ((next_node, closest_node),) + Utils.recursive_node_connector(potential_nodes, connector_nodes, center)
 
     @staticmethod
     def find_node_pairs(grid_nodes, connector_nodes, center):
@@ -373,4 +371,4 @@ class Utils:
         if len(potential_nodes) < len(connector_nodes):
             raise ValueError("No enoght nodes found")
 
-        return Utils.recursive_node_connector(potential_nodes, connector_nodes,center)
+        return Utils.recursive_node_connector(potential_nodes, connector_nodes, center)

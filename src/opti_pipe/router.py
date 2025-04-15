@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
-from opti_pipe.models import NodeType, Pipe, Model
+from opti_pipe.models import NodeType, Pipe, Model, Node
 import networkx as nx
 from functools import partial
 import shapely
 from opti_pipe.utils import Config
+
 
 class Utils:
     @staticmethod
@@ -24,14 +25,11 @@ class Utils:
         return (dx / length, dy / length)
 
     @staticmethod
-    def _make_poly_point_and_direction(point, direction, end, width):
+    def _make_line_point_and_direction(point, direction, length):
         x, y = point.x, point.y
-        length = point.distance(end)
+
         dx, dy = direction[0] * length, direction[1] * length
-        line = shapely.LineString([(x - dx, y - dy), (x + dx, y + dy)])
-        return line.buffer(width / 2, cap_style="square")
-
-
+        return shapely.LineString([(x - dx, y - dy), (x + dx, y + dy)])
 
     @staticmethod
     def _get_width_from_geometry(geom):
@@ -40,37 +38,53 @@ class Utils:
         x_range = maxx - minx
         y_range = maxy - miny
         return max(x_range, y_range)
-    
+
     @staticmethod
-    def get_centerline(model: Model, grid_size):
+    def _get_connector_node(model: Model, input_node: Node, output_node: Node):
+        for connector in model.connectors:
+            for conn_node in connector.iter_nodes():
+                if conn_node in [input_node, output_node]:
+                    return conn_node, connector
+        raise ValueError("No connector node found for input and output nodes")
 
-        floor = model.floor
-        distributor = model.distributor
-        connectors = model.connectors
+    @staticmethod
+    def get_centerline(model: Model, input_node: Node, output_node: Node):
 
+        distributor_node = next(filter(lambda x: x in model.distributor.iter_nodes(), (input_node, output_node)), None)
 
-        _dir: tuple[float, float] = Utils._get_direction(distributor.inlets[0], distributor.outlets[0])
-        _centroid: shapely.Point = distributor.geometry.centroid
+        if distributor_node is None:
+            raise ValueError("Distributor node not found in input or output nodes")
+        _distributor_node = next(iter(model.graph.graph[distributor_node.id]), distributor_node.id)
+        distributor_node = next(iter(filter(lambda x: x.id == _distributor_node, model.graph.nodes)), None)
+        if distributor_node is None:
+            raise ValueError("Distributor node not found in graph")
+        _dist_dir: tuple[float, float] = Utils._get_direction(model.distributor.inlets[0], model.distributor.outlets[0])
+        dist_line = Utils._make_line_point_and_direction(
+            distributor_node.geometry,
+            _dist_dir[::-1],
+            model.floor.geometry.envelope.boundary.length,
+        )
 
-        # reverse the direction (flip 90 degrees) and setting point far away from the centroid
-        polys = [Utils._make_poly_point_and_direction(_centroid, _dir[::-1], shapely.Point(1000, 1000), Utils._get_width_from_geometry(distributor.geometry))]
-        for elem in connectors:
-            _dir: tuple[float, float] = Utils._get_direction(elem.input, elem.output)
-            _centroid: shapely.Point = elem.geometry.centroid
-            width = Utils._get_width_from_geometry(elem.geometry)
-            polys.append(Utils._make_poly_point_and_direction(_centroid, _dir[::-1], polys[0], width))
-        target_area = shapely.unary_union(polys)
+        conn_node, connector = Utils._get_connector_node(model, input_node, output_node)
+        _conn_node = next(iter(model.graph.graph[conn_node.id]), conn_node)
+        conn_node = next(filter(lambda x: x.id == _conn_node, model.graph.nodes), None)
+        _conn_dir: tuple[float, float] = Utils._get_direction(connector.input, connector.output)
+        conn_line = Utils._make_line_point_and_direction(
+            conn_node.geometry, _conn_dir[::-1], model.floor.geometry.envelope.boundary.length
+        )
 
-        return floor.geometry.intersection(target_area)
+        multi_line = shapely.MultiLineString([dist_line, conn_line])
+        return model.floor.geometry.intersection(multi_line)
+
 
 class Router(ABC):
     def __init__(self, config, model):
         self.config = config
         self.model = model
         _center = self.model.distributor.geometry.centroid
-        self.node_pairs = sorted(tuple(self.find_node_pairs()), key=lambda x: x[0].geometry.distance(_center)) # sort by distance to distributor center to process nodes to the inner first
-
-
+        self.node_pairs = sorted(
+            tuple(self.find_node_pairs()), key=lambda x: x[0].geometry.distance(_center)
+        )  # sort by distance to distributor center to process nodes to the inner first
 
     def find_node_pairs(self):
         room_inputs = [con.input for con in self.model.connectors]
@@ -104,18 +118,20 @@ class NaiveRouter(Router):
         n2x, n2y = float(node2.split("_")[0]), float(node2.split("_")[1])
         nx = (float(n1x) + float(n2x)) / 2
         ny = (float(n1y) + float(n2y)) / 2
-        dx = abs(n1x - n2x)
-        dy = abs(n1y - n2y)
-        bias = int(not 0.0 in (dx, dy)) * 10
-        return center_line.distance(shapely.Point(nx, ny)) + bias
+        # dx = abs(n1x - n2x)
+        # dy = abs(n1y - n2y)
+        # bias = int(not 0.0 in (dx, dy)) * 100
+        # if bias == 100:
+        #     print(f"Bias applied between {node1} and {node2}")
+        return center_line.distance(shapely.Point(nx, ny))
 
     def route(self) -> Model:
         nodes = tuple(self.model.graph.iter_nodes())
-        centerline = Utils.get_centerline(self.model, self.grid_size)
-        w_func = partial(self.weight_func, centerline)
         _graph = self.model.graph.graph.copy()
-        
+
         for input_node, output_node in self.node_pairs:
+            centerline = Utils.get_centerline(self.model, input_node, output_node)
+            w_func = partial(self.weight_func, centerline)
             try:
                 path = nx.shortest_path(_graph, input_node.id, output_node.id, weight=w_func)
             except Exception:
@@ -126,9 +142,8 @@ class NaiveRouter(Router):
                 raise ValueError("Node not found in graph")
             pipe = Pipe.from_path(self.config, path_nodes, self.model.distributor)
             self.model.add(pipe)
-            _graph = Utils.prune_visited_nodes(path_nodes+[input_node,output_node], _graph)
+            _graph = Utils.prune_visited_nodes(path_nodes + [input_node, output_node], _graph)
         return self.model
-
 
 
 class OptiRouter(Router):
