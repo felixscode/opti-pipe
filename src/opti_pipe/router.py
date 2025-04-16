@@ -143,13 +143,16 @@ class NaiveRouter(Router):
             pipe = Pipe.from_path(self.config, path_nodes, self.model.distributor)
             self.model.add(pipe)
             _graph = Utils.prune_visited_nodes(path_nodes + [input_node, output_node], _graph)
+        self.model.graph.graph = _graph
         return self.model
 
 
-class OptiRouter(Router):
+class HeuristicRouter(Router):
     def __init__(self, config, model, grid_size):
         super().__init__(config, model)
         self.grid_size = grid_size
+        self._naive_router = NaiveRouter(config, model, grid_size)
+        self.model = self._naive_router.route()
 
     def route(self):
-        nodes = tuple(self.model.graph.iter_nodes())
+        pass
