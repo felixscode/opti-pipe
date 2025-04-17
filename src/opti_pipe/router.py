@@ -255,8 +255,8 @@ class HeuristicRouter(Router):
                 potential_pipes.append(pipe)
         if not potential_pipes:
             raise ValueError("No potential pipes found")
-        best_pipe = max(potential_pipes,key=lambda x: x.heat)
-        return best_pipe
+        best_pipes = sorted(potential_pipes,key=lambda x: x.heat,reverse=True)
+        return best_pipes
     
     def _build_trav_graph(self,grid_size,pipe,subgraph):
         search_node_ids = tuple(subgraph | set(n.id for n in pipe.corners))
@@ -272,18 +272,28 @@ class HeuristicRouter(Router):
         g.add_edge( pipe.corners[-1].id,pipe.output.id)
         return g
     
+    def _reroute_pipe(self, subgraph, pipe):
+        trav_graph = self._build_trav_graph(self.grid_size,pipe,subgraph)
+        solution = DFSSolver.solve(trav_graph,pipe.input.id,pipe.output.id,time_budget=1)
+        nodes = tuple(self.model.graph.nodes) + tuple([pipe.input, pipe.output]) + tuple(pipe.corners)
+        path_nodes = [next(filter(lambda x: x.id == node_id, nodes), None) for node_id in solution]
+        _pipe = Pipe.from_path(self.config, path_nodes, self.model.distributor)
+        return _pipe
+    
     def route(self):
         subgraphs = tuple(nx.connected_components(self.model.graph.graph))
         for subgraph in subgraphs:
-            pipe = self._find_best_pipe(subgraph,self.model.pipes,tuple(self.model.graph.iter_nodes()),self.grid_size)
-            self.model.pipes = tuple(p for p in self.model.pipes if p != pipe)
-            trav_graph = self._build_trav_graph(self.grid_size,pipe,subgraph)
-            solution = DFSSolver.solve(trav_graph,pipe.input.id,pipe.output.id,time_budget=1)
-            nodes = tuple(self.model.graph.nodes) + tuple([pipe.input, pipe.output]) + tuple(pipe.corners)
-            path_nodes = [next(filter(lambda x: x.id == node_id, nodes), None) for node_id in solution]
-            pipe = Pipe.from_path(self.config, path_nodes, self.model.distributor)
-            self.model.add(pipe)
+            pipes = self._find_best_pipe(subgraph,self.model.pipes,tuple(self.model.graph.iter_nodes()),self.grid_size)
+            for pipe in pipes:
+                self.model.pipes = tuple(p for p in self.model.pipes if p != pipe)
+                _pipe = self._reroute_pipe(subgraph, pipe)
+                if len(_pipe.corners) > len(pipe.corners):
+                    self.model.add(_pipe)
+                    break
+                else:
+                    self.model.add(pipe)
         return self.model
+
 
 
 
